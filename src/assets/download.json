@@ -1,0 +1,128 @@
+import React from 'react';
+import { saveAs } from 'file-saver';
+import ExcelJS from 'exceljs';
+import data from '../assets/data.json';
+
+const Download = () => {
+  const handleDownload = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Sheet1');
+
+    //Remove gridline
+    worksheet.views = [{ showGridLines: false }];
+
+    // Set the title in cell B2
+    const titleCell = worksheet.getCell('B2');
+    titleCell.value = 'Escalations';
+    titleCell.font = { bold: true, size: 18 };
+
+    // Convert the keys of the first object into column headers and start from B4
+    const headers = Object.keys(data[0]);
+    headers.forEach((header, index) => {
+      // Set column width based on header length
+      const column = worksheet.getColumn(index + 2);
+      column.width = header.length > 10 ? header.length * 1.3 : 20; // Double width if header has more than one word
+
+      const cell = worksheet.getCell(4, index + 2);
+      cell.value = header;
+      cell.style.font = { bold: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'ADD8E6' } // Light blue background color
+      };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+
+    // Add the data rows starting from row 5 and column B
+    data.forEach((item, rowIndex) => {
+      headers.forEach((header, colIndex) => {
+        const cell = worksheet.getCell(rowIndex + 5, colIndex + 2);
+        
+        let cellValue = item[header];
+
+        // For "Attributes" column, replace commas with newline characters
+        if (header === 'Attributes' && cellValue) {
+          cellValue = cellValue.split(',').join(',\n');
+        }
+
+        cell.value = cellValue;
+
+        
+
+        // Apply conditional formatting based on 'Status' and 'Score' columns
+        if (header === 'Status') {
+          const status = item[header].toLowerCase(); // Normalize status value
+
+          if (status === 'open') {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: '99FF99' } // Green background
+            };
+          } else if (status === 'closed') {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FF9999' } // Red background
+            };
+          } else {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFF99' } // Yellow background
+            };
+          }
+        } else if (header === 'Score') {
+          const score = parseFloat(item[header]);
+
+          if (!isNaN(score)) {
+            if (score > 8) {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: '99FF99' } // Green background
+              };
+            } else if (score > 6) {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFFF99' } // Yellow background
+              };
+            } else {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF9999' } // Red background
+              };
+            }
+          }  
+        }
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; // adding border
+        cell.alignment = { vertical: 'top' }; // top-align 
+        const wordsCount = String(item[header]).split(' ').length;
+        if (wordsCount >= 3) {
+            cell.alignment.wrapText = true; // top-align wrapped text
+          // Double the column width if more than 10 words
+          const currentWidth = worksheet.getColumn(colIndex + 2).width;
+          worksheet.getColumn(colIndex + 2).width = currentWidth * 1.2;
+        }
+      });
+    });
+
+    // Save the file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, 'data.xlsx');
+  };
+
+  return (
+    <div>
+      <button onClick={handleDownload}>Download Excel</button>
+      <p>data</p>
+    </div>
+  );
+};
+
+export default Download;
