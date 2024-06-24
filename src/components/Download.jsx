@@ -2,17 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { saveAs } from 'file-saver';
 import ExcelJS from 'exceljs';
 import data from '../assets/data.json';
-import './Download.css'; // Import your CSS file
+import './Download.css'; // CSS file
 
 const Download = () => {
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
+  const [conditionalFormattingVisible, setConditionalFormattingVisible] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
-  const [conditionalFormatting, setConditionalFormatting] = useState({
-    Status: false,
-    Score: false,
-    'Additional feedback': false,
-  });
+  const [conditionalFormattingRules, setConditionalFormattingRules] = useState([]);
 
   const headers = Object.keys(data[0]);
 
@@ -20,7 +17,7 @@ const Download = () => {
     if (selectAll) {
       setSelectedColumns(headers);
     } else if (selectedColumns.length === headers.length) {
-      setSelectedColumns([]); // Clear all selected columns if deselecting "Select All"
+      setSelectedColumns([]); // Clear all selected columns if deselecting "Select All". Convert it into just deselecting that specific column
     }
   }, [selectAll, headers, selectedColumns.length]);
 
@@ -31,93 +28,66 @@ const Download = () => {
     );
     if (!checked) {
       setSelectAll(false);
-      if (value in conditionalFormatting) {
-        setConditionalFormatting(prev => ({
-          ...prev,
-          [value]: false,
-        }));
-      }
     }
   };
 
-  const handleConditionalFormatChange = (event) => {
-    const { value, checked } = event.target;
-    setConditionalFormatting(prev => ({
-      ...prev,
-      [value]: checked,
-    }));
+  const handleAddConditionalFormattingRule = () => {
+    setConditionalFormattingRules(prev => [...prev, { column: '', condition: '', color: '' }]);
+  };
+
+  const handleConditionalFormattingRuleChange = (index, field, value) => {
+    const newRules = [...conditionalFormattingRules];
+    newRules[index][field] = value;
+    setConditionalFormattingRules(newRules);
+  };
+
+  const evaluateCondition = (value, condition) => {
+    console.log(`Evaluating condition: ${condition} for value: ${value}`);
+    const operators = {
+      '>': (a, b) => a > b,
+      '<': (a, b) => a < b,
+      '>=': (a, b) => a >= b,
+      '<=': (a, b) => a <= b,
+      '==': (a, b) => a == b,
+      '===': (a, b) => a === b,
+      '!=': (a, b) => a != b,
+      '!==': (a, b) => a !== b
+    };
+
+    const match = condition.match(/([><=!]+)\s*(\d+)/);
+    if (match) {
+      const [, operator, threshold] = match;
+      const thresholdNumber = parseFloat(threshold);
+
+      if (operators[operator]) {
+        return operators[operator](value, thresholdNumber);
+      }
+    }
+
+    return false;
   };
 
   const applyConditionalFormatting = (cell, header, item) => {
-    if (header === 'Status' && conditionalFormatting.Status) {
-      const status = item[header].toLowerCase(); // Normalize status value
+    conditionalFormattingRules.forEach(rule => {
+      if (rule.column === header) {
+        const condition = rule.condition;
+        const color = rule.color;
 
-      if (status === 'open') {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: '99FF99' } // Green background
-        };
-      } else if (status === 'closed') {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FF9999' } // Red background
-        };
-      } else {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFF99' } // Yellow background
-        };
-      }
-    } else if (header === 'Score' && conditionalFormatting.Score) {
-      const score = parseFloat(item[header]);
-
-      if (!isNaN(score)) {
-        if (score > 8) {
+        if (evaluateCondition(item[header], condition)) {
+          console.log(`Applying color: ${color} to cell with value: ${item[header]} for header: ${header}`);
           cell.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: '99FF99' } // Green background
-          };
-        } else if (score > 6) {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFF99' } // Yellow background
-          };
-        } else {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF9999' } // Red background
+            fgColor: { argb: color }
           };
         }
       }
-    } else if (header === 'Additional feedback' && conditionalFormatting['Additional feedback']) {
-      // Example conditional formatting for 'Additional feedback'
-      // Add specific conditional formatting logic here
-      const feedback = item[header];
-      if (feedback.includes('Yes')) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: '99FF99' } // Green background
-        };
-      } else if (feedback.includes('No')) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FF9999' } // Red background
-        };
-      }
-    }
+    });
   };
 
   const handleDownload = async () => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Sheet1');
+    const worksheet = workbook.addWorksheet('Escalations');
 
     const filteredHeaders = headers.filter(header => selectedColumns.includes(header));
 
@@ -163,9 +133,9 @@ const Download = () => {
           worksheet.getColumn(colIndex + 2).width = currentWidth * 1.2;
         }
 
-        if (header === 'Attributes') {
-          cell.value = String(item[header]).split(',').join(',\n');
-        }
+        // if (header === 'Attributes') {
+        //   cell.value = String(item[header]).split(',').join(',\n');
+        // }
 
         cell.border = {
           top: { style: 'thin' },
@@ -181,7 +151,7 @@ const Download = () => {
     // Save the file
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, 'data.xlsx');
+    saveAs(blob, 'escalations.xlsx');
   };
 
   return (
@@ -190,6 +160,9 @@ const Download = () => {
       <div className="download-buttons">
         <button onClick={() => setDropdownVisible(!dropdownVisible)}>
           {dropdownVisible ? 'Hide Columns' : 'Select Columns'}
+        </button>
+        <button onClick={() => setConditionalFormattingVisible(!conditionalFormattingVisible)}>
+          {conditionalFormattingVisible ? 'Hide Conditional Formatting' : 'Conditional Formatting'}
         </button>
         <button onClick={handleDownload} className="download-button">
           Download Excel
@@ -214,19 +187,40 @@ const Download = () => {
                 onChange={handleColumnChange}
               />
               <label>{column}</label>
-              {['Status', 'Score', 'Additional feedback'].includes(column) && (
-                <>
-                  <input
-                    type="checkbox"
-                    value={column}
-                    checked={conditionalFormatting[column]}
-                    onChange={handleConditionalFormatChange}
-                  />
-                  <label className="conditional-format-label">Conditional Formatting</label>
-                </>
-              )}
             </div>
           ))}
+        </div>
+      )}
+      {conditionalFormattingVisible && (
+        <div className="conditional-formatting">
+          {conditionalFormattingRules.map((rule, index) => (
+            <div key={index} className="conditional-formatting-rule">
+              <select
+                value={rule.column}
+                onChange={(e) => handleConditionalFormattingRuleChange(index, 'column', e.target.value)}
+              >
+                <option value="">Select Column</option>
+                {headers.map((header) => (
+                  <option key={header} value={header}>{header}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Condition (e.g., >8)"
+                value={rule.condition}
+                onChange={(e) => handleConditionalFormattingRuleChange(index, 'condition', e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Color (e.g., FFFFFF)"
+                value={rule.color}
+                onChange={(e) => handleConditionalFormattingRuleChange(index, 'color', e.target.value)}
+              />
+            </div>
+          ))}
+          {conditionalFormattingRules.length < 10 && (
+            <button onClick={handleAddConditionalFormattingRule}>Add Rule</button>
+          )}
         </div>
       )}
     </div>
@@ -234,5 +228,3 @@ const Download = () => {
 };
 
 export default Download;
-
-

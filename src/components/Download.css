@@ -1,12 +1,9 @@
 .download-container {
-    font-family: Arial, sans-serif;
-    max-width: 800px;
-    margin: auto;
     padding: 20px;
   }
   
   .download-header {
-    text-align: center;
+    font-size: 24px;
     margin-bottom: 20px;
   }
   
@@ -14,32 +11,31 @@
     margin-bottom: 20px;
   }
   
-  .download-buttons button {
-    margin-right: 10px;
+  .download-button {
+    margin-left: 10px;
   }
   
-  .column-selector {
-    margin-bottom: 20px;
-    background-color: #f9f9f9;
+  .column-selector, .conditional-formatting {
+    margin-top: 20px;
     padding: 10px;
+    border: 1px solid #ccc;
     border-radius: 5px;
-  }
-  
-  .column-selector label {
-    margin-right: 10px;
+    background-color: #f9f9f9;
   }
   
   .checkbox-container {
-    margin-bottom: 5px;
     display: flex;
     align-items: center;
+    margin-bottom: 10px;
   }
   
-  .checkbox-container input[type="checkbox"] {
+  .conditional-formatting-rule {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .conditional-formatting-rule select, .conditional-formatting-rule input {
     margin-right: 10px;
-  }
-  
-  .conditional-format-label {
-    color: gray;
   }
   
