@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { saveAs } from 'file-saver';
 import ExcelJS from 'exceljs';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import data from '../assets/data.json';
-import './Download.css'; // Assuming CSS is used for styling
+import './Download.css'; // CSS file
 
 const Download = () => {
   const [rowData, setRowData] = useState([]);
@@ -22,6 +22,7 @@ const Download = () => {
     const initialColumnDefs = headers.map((header, index) => ({
       headerName: header,
       field: header,
+      editable: false,
       sortable: true,
       filter: true,
       floatingFilter: floatingFilterVisible,
@@ -30,14 +31,17 @@ const Download = () => {
     }));
     setColumnDefs(initialColumnDefs);
     setColumnOrder(headers);
-    setSelectedColumns(headers); // Default to all columns selected
   }, [floatingFilterVisible]);
 
   const handleDownloadExcel = async () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Escalations');
 
-    selectedColumns.forEach((header, index) => {
+    const columnsToDownload = selectedColumns.filter(column => columnOrder.includes(column));
+
+
+
+    columnsToDownload.forEach((header, index) => {
       const column = worksheet.getColumn(index + 1);
       column.width = header.length > 10 ? header.length * 1.3 : 20;
 
@@ -58,7 +62,7 @@ const Download = () => {
     });
 
     rowData.forEach((item, rowIndex) => {
-      selectedColumns.forEach((column, colIndex) => {
+      columnsToDownload.forEach((column, colIndex) => {
         const cell = worksheet.getCell(rowIndex + 2, colIndex + 1);
         cell.value = item[column];
         cell.alignment = { wrapText: true, vertical: 'top' };
@@ -70,9 +74,7 @@ const Download = () => {
         };
       });
     });
-
     worksheet.views = [{ showGridLines: false }];
-
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -81,9 +83,11 @@ const Download = () => {
   };
 
   const handleDownloadCSV = () => {
+    const columnsToDownload = selectedColumns.filter(column => columnOrder.includes(column));
     const csvContent = [
-      selectedColumns.join(','), // Add headers row
-      ...rowData.map(item => selectedColumns.map(column => item[column]).join(',')) // Add data rows
+      columnsToDownload.join(','), // Add headers row
+
+      ...rowData.map(item => columnsToDownload.map(column => item[column]).join(',')) // Add data rows
     ].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, 'escalations.csv');
@@ -101,30 +105,50 @@ const Download = () => {
     const newColumnOrder = event.columnApi.getAllDisplayedColumns().map(col => col.getColId());
     setColumnOrder(newColumnOrder);
   };
-
   const handleColumnSelectionChange = (event) => {
+
     const { value, checked } = event.target;
+
     setSelectedColumns(prevSelectedColumns =>
+
       checked ? [...prevSelectedColumns, value] : prevSelectedColumns.filter(column => column !== value)
+
     );
+
   };
+
+
 
   const toggleDropdown = () => {
+
     setDropdownVisible(!dropdownVisible);
+
   };
 
-  const handleClickOutside = (event) => {
-    if (dropdownVisible && !event.target.closest('.dropdown')) {
-      setDropdownVisible(false);
-    }
-  };
+
 
   useEffect(() => {
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
+
+    const handleClickOutside = (event) => {
+
+      if (dropdownVisible && !event.target.closest('.dropdown')) {
+
+        setDropdownVisible(false);
+
+      }
+
     };
+
+    document.addEventListener('click', handleClickOutside);
+
+    return () => {
+
+      document.removeEventListener('click', handleClickOutside);
+
+    };
+
   }, [dropdownVisible]);
+
 
   return (
     <div className="download-container">
@@ -137,26 +161,37 @@ const Download = () => {
           Download CSV
         </button>
         <div className="dropdown">
-          <button onClick={toggleDropdown} className="dropdown-button">
-            Select Columns
-          </button>
-          {dropdownVisible && (
-            <div className="dropdown-content">
-              {columnOrder.map(column => (
-                <div key={column}>
-                  <input
-                    type="checkbox"
-                    id={column}
-                    value={column}
-                    checked={selectedColumns.includes(column)}
-                    onChange={handleColumnSelectionChange}
-                  />
-                  <label htmlFor={column}>{column}</label>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+
+<button onClick={toggleDropdown} className="dropdown-button">
+
+  Select Columns
+
+</button>
+
+{dropdownVisible && (
+
+  <div className="dropdown-content">
+
+    {columnOrder.map(column => (
+
+      <div key={column} className="dropdown-item">
+
+        <input
+          type="checkbox"
+          id={column}
+          value={column}
+          checked={selectedColumns.includes(column)}
+          onChange={handleColumnSelectionChange}
+        />
+        <label htmlFor={column}>{column}</label>
+      </div>
+    ))}
+
+  </div>
+
+)}
+
+</div>
       </div>
       <div className="ag-theme-alpine" style={{ height: 400, width: '100%' }}>
         <AgGridReact
@@ -164,7 +199,9 @@ const Download = () => {
           rowData={rowData}
           deltaRowDataMode={true}
           getRowId={params => params.data.id} // Assuming each row data has a unique 'id' field
-          enableCellTextSelection={true}
+          // rowSelection="multiple"
+          animateRows={false}
+          enableCellTextSelection={false}
           suppressContextMenu={true}
           suppressCellSelection={true}
           onGridReady={onGridReady}
