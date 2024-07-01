@@ -37,15 +37,20 @@ const Download = () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Escalations');
 
+     // Add title in cell B2
+     const titleCell = worksheet.getCell('B2');
+     titleCell.value = 'Escalations Data';
+     titleCell.style.font = { size: 18, bold: true };
+
     const columnsToDownload = selectedColumns.filter(column => columnOrder.includes(column));
 
 
 
     columnsToDownload.forEach((header, index) => {
-      const column = worksheet.getColumn(index + 1);
+      const column = worksheet.getColumn(index + 2);
       column.width = header.length > 10 ? header.length * 1.3 : 20;
 
-      const cell = worksheet.getCell(1, index + 1);
+      const cell = worksheet.getCell(4, index + 2);
       cell.value = header;
       cell.style.font = { bold: true };
       cell.fill = {
@@ -63,7 +68,7 @@ const Download = () => {
 
     rowData.forEach((item, rowIndex) => {
       columnsToDownload.forEach((column, colIndex) => {
-        const cell = worksheet.getCell(rowIndex + 2, colIndex + 1);
+        const cell = worksheet.getCell(rowIndex + 5, colIndex + 2);
         cell.value = item[column];
         cell.alignment = { wrapText: true, vertical: 'top' };
         cell.border = {
