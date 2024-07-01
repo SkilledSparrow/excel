@@ -1,112 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { saveAs } from 'file-saver';
 import ExcelJS from 'exceljs';
+import { AgGridReact } from 'ag-grid-react';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
 import data from '../assets/data.json';
-import './Download.css'; // CSS file
+import './Download.css'; // Assuming CSS is used for styling
 
 const Download = () => {
+  const [rowData, setRowData] = useState([]);
+  const [floatingFilterVisible, setFloatingFilterVisible] = useState(false);
+  const [columnDefs, setColumnDefs] = useState([]);
+  const gridApiRef = useRef(null);
+  const [columnOrder, setColumnOrder] = useState([]);
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [conditionalFormattingVisible, setConditionalFormattingVisible] = useState(false);
-  const [selectAll, setSelectAll] = useState(false);
-  const [conditionalFormattingRules, setConditionalFormattingRules] = useState([]);
-
-  const headers = Object.keys(data[0]);
 
   useEffect(() => {
-    if (selectAll) {
-      setSelectedColumns(headers);
-    } else if (selectedColumns.length === headers.length) {
-      setSelectedColumns([]); // Clear all selected columns if deselecting "Select All". Convert it into just deselecting that specific column
-    }
-  }, [selectAll, headers, selectedColumns.length]);
+    setRowData(data);
+    const headers = Object.keys(data[0]);
+    const initialColumnDefs = headers.map((header, index) => ({
+      headerName: header,
+      field: header,
+      sortable: true,
+      filter: true,
+      floatingFilter: floatingFilterVisible,
+      resizable: true,
+      headerCheckboxSelection: index === 0,
+    }));
+    setColumnDefs(initialColumnDefs);
+    setColumnOrder(headers);
+    setSelectedColumns(headers); // Default to all columns selected
+  }, [floatingFilterVisible]);
 
-  const handleColumnChange = (event) => {
-    const { value, checked } = event.target;
-    setSelectedColumns(prev =>
-      checked ? [...prev, value] : prev.filter(col => col !== value)
-    );
-    if (!checked) {
-      setSelectAll(false);
-    }
-  };
-
-  const handleAddConditionalFormattingRule = () => {
-    setConditionalFormattingRules(prev => [...prev, { column: '', condition: '', color: '' }]);
-  };
-
-  const handleConditionalFormattingRuleChange = (index, field, value) => {
-    const newRules = [...conditionalFormattingRules];
-    newRules[index][field] = value;
-    setConditionalFormattingRules(newRules);
-  };
-
-  const evaluateCondition = (value, condition) => {
-    console.log(`Evaluating condition: ${condition} for value: ${value}`);
-    const operators = {
-      '>': (a, b) => a > b,
-      '<': (a, b) => a < b,
-      '>=': (a, b) => a >= b,
-      '<=': (a, b) => a <= b,
-      '==': (a, b) => a == b,
-      '===': (a, b) => a === b,
-      '!=': (a, b) => a != b,
-      '!==': (a, b) => a !== b
-    };
-
-    const match = condition.match(/([><=!]+)\s*(\d+)/);
-    if (match) {
-      const [, operator, threshold] = match;
-      const thresholdNumber = parseFloat(threshold);
-
-      if (operators[operator]) {
-        return operators[operator](value, thresholdNumber);
-      }
-    }
-
-    return false;
-  };
-
-  const applyConditionalFormatting = (cell, header, item) => {
-    conditionalFormattingRules.forEach(rule => {
-      if (rule.column === header) {
-        const condition = rule.condition;
-        const color = rule.color;
-
-        if (evaluateCondition(item[header], condition)) {
-          console.log(`Applying color: ${color} to cell with value: ${item[header]} for header: ${header}`);
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: color }
-          };
-        }
-      }
-    });
-  };
-
-  const handleDownload = async () => {
+  const handleDownloadExcel = async () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Escalations');
 
-    const filteredHeaders = headers.filter(header => selectedColumns.includes(header));
+    selectedColumns.forEach((header, index) => {
+      const column = worksheet.getColumn(index + 1);
+      column.width = header.length > 10 ? header.length * 1.3 : 20;
 
-    // Add title to cell B2
-    const titleCell = worksheet.getCell('B2');
-    titleCell.value = 'Data Export';
-    titleCell.font = { size: 18, bold: true };
-
-    filteredHeaders.forEach((header, index) => {
-      const column = worksheet.getColumn(index + 2);
-      column.width = header.length > 10 ? header.length * 1.3 : 20; // Adjust column width
-
-      const cell = worksheet.getCell(4, index + 2);
+      const cell = worksheet.getCell(1, index + 1);
       cell.value = header;
       cell.style.font = { bold: true };
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'D9EAD3' }, // Light blue background
+        fgColor: { argb: 'D9EAD3' },
       };
       cell.border = {
         top: { style: 'thin' },
@@ -116,27 +57,11 @@ const Download = () => {
       };
     });
 
-    // Add the data rows starting from row 5 and column B
-    data.forEach((item, rowIndex) => {
-      filteredHeaders.forEach((header, colIndex) => {
-        const cell = worksheet.getCell(rowIndex + 5, colIndex + 2);
-        cell.value = item[header];
+    rowData.forEach((item, rowIndex) => {
+      selectedColumns.forEach((column, colIndex) => {
+        const cell = worksheet.getCell(rowIndex + 2, colIndex + 1);
+        cell.value = item[column];
         cell.alignment = { wrapText: true, vertical: 'top' };
-
-        applyConditionalFormatting(cell, header, item);
-
-        const wordsCount = String(item[header]).split(' ').length;
-        if (wordsCount > 10) {
-          cell.alignment = { wrapText: true };
-          // Double the column width if more than 10 words
-          const currentWidth = worksheet.getColumn(colIndex + 2).width;
-          worksheet.getColumn(colIndex + 2).width = currentWidth * 1.2;
-        }
-
-        // if (header === 'Attributes') {
-        //   cell.value = String(item[header]).split(',').join(',\n');
-        // }
-
         cell.border = {
           top: { style: 'thin' },
           left: { style: 'thin' },
@@ -148,81 +73,107 @@ const Download = () => {
 
     worksheet.views = [{ showGridLines: false }];
 
-    // Save the file
     const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
     saveAs(blob, 'escalations.xlsx');
   };
+
+  const handleDownloadCSV = () => {
+    const csvContent = [
+      selectedColumns.join(','), // Add headers row
+      ...rowData.map(item => selectedColumns.map(column => item[column]).join(',')) // Add data rows
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    saveAs(blob, 'escalations.csv');
+  };
+
+  const toggleFloatingFilter = () => {
+    setFloatingFilterVisible(!floatingFilterVisible);
+  };
+
+  const onGridReady = params => {
+    gridApiRef.current = params.api;
+  };
+
+  const onColumnMoved = event => {
+    const newColumnOrder = event.columnApi.getAllDisplayedColumns().map(col => col.getColId());
+    setColumnOrder(newColumnOrder);
+  };
+
+  const handleColumnSelectionChange = (event) => {
+    const { value, checked } = event.target;
+    setSelectedColumns(prevSelectedColumns =>
+      checked ? [...prevSelectedColumns, value] : prevSelectedColumns.filter(column => column !== value)
+    );
+  };
+
+  const toggleDropdown = () => {
+    setDropdownVisible(!dropdownVisible);
+  };
+
+  const handleClickOutside = (event) => {
+    if (dropdownVisible && !event.target.closest('.dropdown')) {
+      setDropdownVisible(false);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [dropdownVisible]);
 
   return (
     <div className="download-container">
       <h2 className="download-header">Excel Data Export</h2>
       <div className="download-buttons">
-        <button onClick={() => setDropdownVisible(!dropdownVisible)}>
-          {dropdownVisible ? 'Hide Columns' : 'Select Columns'}
-        </button>
-        <button onClick={() => setConditionalFormattingVisible(!conditionalFormattingVisible)}>
-          {conditionalFormattingVisible ? 'Hide Conditional Formatting' : 'Conditional Formatting'}
-        </button>
-        <button onClick={handleDownload} className="download-button">
+        <button onClick={handleDownloadExcel} className="download-button">
           Download Excel
         </button>
-      </div>
-      {dropdownVisible && (
-        <div className="column-selector">
-          <div>
-            <input
-              type="checkbox"
-              checked={selectAll}
-              onChange={() => setSelectAll(!selectAll)}
-            />
-            <label>Select All</label>
-          </div>
-          {headers.map((column) => (
-            <div key={column} className="checkbox-container">
-              <input
-                type="checkbox"
-                value={column}
-                checked={selectedColumns.includes(column)}
-                onChange={handleColumnChange}
-              />
-              <label>{column}</label>
+        <button onClick={handleDownloadCSV} className="download-button">
+          Download CSV
+        </button>
+        <div className="dropdown">
+          <button onClick={toggleDropdown} className="dropdown-button">
+            Select Columns
+          </button>
+          {dropdownVisible && (
+            <div className="dropdown-content">
+              {columnOrder.map(column => (
+                <div key={column}>
+                  <input
+                    type="checkbox"
+                    id={column}
+                    value={column}
+                    checked={selectedColumns.includes(column)}
+                    onChange={handleColumnSelectionChange}
+                  />
+                  <label htmlFor={column}>{column}</label>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-      {conditionalFormattingVisible && (
-        <div className="conditional-formatting">
-          {conditionalFormattingRules.map((rule, index) => (
-            <div key={index} className="conditional-formatting-rule">
-              <select
-                value={rule.column}
-                onChange={(e) => handleConditionalFormattingRuleChange(index, 'column', e.target.value)}
-              >
-                <option value="">Select Column</option>
-                {headers.map((header) => (
-                  <option key={header} value={header}>{header}</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Condition (e.g., >8)"
-                value={rule.condition}
-                onChange={(e) => handleConditionalFormattingRuleChange(index, 'condition', e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Color (e.g., FFFFFF)"
-                value={rule.color}
-                onChange={(e) => handleConditionalFormattingRuleChange(index, 'color', e.target.value)}
-              />
-            </div>
-          ))}
-          {conditionalFormattingRules.length < 10 && (
-            <button onClick={handleAddConditionalFormattingRule}>Add Rule</button>
           )}
         </div>
-      )}
+      </div>
+      <div className="ag-theme-alpine" style={{ height: 400, width: '100%' }}>
+        <AgGridReact
+          columnDefs={columnDefs}
+          rowData={rowData}
+          deltaRowDataMode={true}
+          getRowId={params => params.data.id} // Assuming each row data has a unique 'id' field
+          enableCellTextSelection={true}
+          suppressContextMenu={true}
+          suppressCellSelection={true}
+          onGridReady={onGridReady}
+          onColumnMoved={onColumnMoved}
+        />
+        <button onClick={toggleFloatingFilter} className="toggle-filter-button">
+          {floatingFilterVisible ? 'Hide Filters' : 'Show Filters'}
+        </button>
+      </div>
     </div>
   );
 };
